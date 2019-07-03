@@ -73,6 +73,15 @@ namespace OpenTelemetry.Trace
         /// <returns>Span builder for the span with the given name and specified parent span context.</returns>
         ISpanBuilder SpanBuilderWithParentContext(string name, SpanKind kind = SpanKind.Internal, SpanContext parentContext = null); // as child of context
 
+        /// <summary>
+        /// Gets the span builder for the span with the give name and remote parent context.
+        /// </summary>
+        /// <param name="name">Span name.</param>
+        /// <param name="kind">Span kind.</param>
+        /// <param name="activity">Remote parent context extracted from the wire.</param>
+        /// <returns>Span builder for the span with the given name and specified parent span context.</returns>
+        ISpanBuilder SpanBuilderWithParentActivity(string name, SpanKind kind = SpanKind.Internal, Activity activity = null); // as child of context
+
         ISpanBuilder SpanBuilderFromActivity(string name, SpanKind kind = SpanKind.Internal, Activity activity = null); // as span for this activity
 
         /// <summary>

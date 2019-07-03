@@ -82,6 +82,11 @@ namespace OpenTelemetry.Trace
             return OpenTelemetry.Trace.SpanBuilder.Create(name, kind, parentContext, this.spanBuilderOptions);
         }
 
+        public override ISpanBuilder SpanBuilderWithParentActivity(string name, SpanKind kind = SpanKind.Internal, Activity activity = null)
+        {
+            return OpenTelemetry.Trace.SpanBuilder.Create(name, kind, activity, asChildOfActivity: true, this.spanBuilderOptions);
+        }
+
         public override ISpanBuilder SpanBuilderFromActivity(string name, SpanKind kind = SpanKind.Internal, Activity activity = null)
         {
             return OpenTelemetry.Trace.SpanBuilder.Create(name, kind, activity, asChildOfActivity:false, this.spanBuilderOptions);

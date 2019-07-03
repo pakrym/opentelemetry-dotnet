@@ -71,6 +71,11 @@ namespace OpenTelemetry.Trace
             return NoopSpanBuilder.SetParent(name, kind, parentContext);
         }
 
+        public override ISpanBuilder SpanBuilderWithParentActivity(string name, SpanKind kind = SpanKind.Internal, Activity activity = null)
+        {
+            return NoopSpanBuilder.SetParent(name, kind, activity);
+        }
+
         public override ISpanBuilder SpanBuilderFromActivity(string name, SpanKind kind = SpanKind.Internal, Activity activity = null)
         {
             return NoopSpanBuilder.SetParent(name, kind, activity);
