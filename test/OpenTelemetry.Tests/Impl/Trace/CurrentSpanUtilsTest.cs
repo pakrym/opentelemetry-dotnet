@@ -16,26 +16,23 @@
 
 namespace OpenTelemetry.Trace.Test
 {
+    using System.Diagnostics;
     using Moq;
-    using OpenTelemetry.Context;
-    using OpenTelemetry.Trace.Internal;
     using Xunit;
 
     public class CurrentSpanUtilsTest
     {
         private ISpan span;
-        private RandomGenerator random;
         private SpanContext spanContext;
         private SpanOptions spanOptions;
 
         public CurrentSpanUtilsTest()
         {
-            random = new RandomGenerator(1234);
             spanContext =
                 SpanContext.Create(
-                    TraceId.GenerateRandomId(random),
-                    SpanId.GenerateRandomId(random),
-                    TraceOptions.Builder().SetIsSampled(true).Build(),
+                    ActivityTraceId.CreateRandom(),
+                    ActivitySpanId.CreateRandom(),
+                    ActivityTraceFlags.Recorded,
                     Tracestate.Empty);
 
             spanOptions = SpanOptions.RecordEvents;

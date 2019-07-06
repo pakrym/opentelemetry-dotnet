@@ -18,6 +18,7 @@ namespace OpenTelemetry.Trace.Export.Test
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Linq;
     using System.Threading;
     using System.Threading.Tasks;
@@ -34,7 +35,6 @@ namespace OpenTelemetry.Trace.Export.Test
     {
         private const String SPAN_NAME_1 = "MySpanName/1";
         private const String SPAN_NAME_2 = "MySpanName/2";
-        private readonly RandomGenerator random = new RandomGenerator(1234);
         private readonly SpanContext sampledSpanContext;
         private readonly SpanContext notSampledSpanContext;
         private readonly ISpanExporter spanExporter = SpanExporter.Create(4, Duration.Create(1, 0));
@@ -46,8 +46,8 @@ namespace OpenTelemetry.Trace.Export.Test
 
         public SpanExporterTest()
         {
-            sampledSpanContext = SpanContext.Create(TraceId.GenerateRandomId(random), SpanId.GenerateRandomId(random), TraceOptions.Builder().SetIsSampled(true).Build(), Tracestate.Empty);
-            notSampledSpanContext = SpanContext.Create(TraceId.GenerateRandomId(random), SpanId.GenerateRandomId(random), TraceOptions.Default, Tracestate.Empty);
+            sampledSpanContext = SpanContext.Create(ActivityTraceId.CreateRandom(), ActivitySpanId.CreateRandom(), ActivityTraceFlags.Recorded, Tracestate.Empty);
+            notSampledSpanContext = SpanContext.Create(ActivityTraceId.CreateRandom(), ActivitySpanId.CreateRandom(), ActivityTraceFlags.None, Tracestate.Empty);
             startEndHandler = new StartEndHandler(spanExporter, runningSpanStore, null, new SimpleEventQueue());
 
             spanExporter.RegisterHandler("test.service", serviceHandler);
@@ -61,7 +61,7 @@ namespace OpenTelemetry.Trace.Export.Test
                     recordSpanOptions,
                     spanName,
                     SpanKind.Internal,
-                    null,
+                    default,
                     TraceParams.Default,
                     startEndHandler,
                     null);
@@ -77,7 +77,7 @@ namespace OpenTelemetry.Trace.Export.Test
                     recordSpanOptions,
                     spanName,
                     SpanKind.Internal,
-                    null,
+                    default,
                     TraceParams.Default,
                     startEndHandler,
                     null);
