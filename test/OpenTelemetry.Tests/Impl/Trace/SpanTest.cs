@@ -26,29 +26,26 @@ namespace OpenTelemetry.Trace.Test
     using OpenTelemetry.Trace.Config;
     using Xunit;
 
-    public class SpanTest
+    public class SpanTest : IDisposable
     {
         private const string SpanName = "MySpanName";
         private const string EventDescription = "MyEvent";
-        private readonly SpanContext spanContext;
-        private readonly ActivitySpanId parentSpanId;
+        
         private TimeSpan interval = TimeSpan.FromMilliseconds(0);
         private readonly DateTimeOffset startTime = DateTimeOffset.Now;
         private readonly Timestamp timestamp;
         private readonly Timer timestampConverter;
         private readonly SpanOptions noRecordSpanOptions = SpanOptions.None;
         private readonly SpanOptions recordSpanOptions = SpanOptions.RecordEvents;
-        private readonly IDictionary<String, IAttributeValue> attributes = new Dictionary<String, IAttributeValue>();
-        private readonly IDictionary<String, IAttributeValue> expectedAttributes;
+        private readonly IDictionary<string, IAttributeValue> attributes = new Dictionary<string, IAttributeValue>();
+        private readonly IDictionary<string, IAttributeValue> expectedAttributes;
         private IStartEndHandler startEndHandler = Mock.Of<IStartEndHandler>();
 
         public SpanTest()
         {
             timestamp = Timestamp.FromDateTimeOffset(startTime);
             timestampConverter = Timer.StartNew(startTime, () => interval);
-            spanContext = SpanContext.Create(ActivityTraceId.CreateRandom(), ActivitySpanId.CreateRandom(),
-                ActivityTraceFlags.None, Tracestate.Empty);
-            parentSpanId = ActivitySpanId.CreateRandom();
+
             attributes.Add(
                 "MyStringAttributeKey", AttributeValue.StringAttributeValue("MyStringAttributeValue"));
             attributes.Add("MyLongAttributeKey", AttributeValue.LongAttributeValue(123L));
@@ -62,13 +59,17 @@ namespace OpenTelemetry.Trace.Test
         [Fact]
         public void ToSpanData_NoRecordEvents()
         {
+            var activityLink = new Activity(SpanName).Start();
+            activityLink.Stop();
+
+            var activity = new Activity(SpanName).Start();
+            
             var span =
                 Span.StartSpan(
-                    spanContext,
+                    activity,
                     noRecordSpanOptions,
                     SpanName,
                     SpanKind.Internal,
-                    parentSpanId,
                     TraceParams.Default,
                     startEndHandler,
                     timestampConverter);
@@ -80,7 +81,7 @@ namespace OpenTelemetry.Trace.Test
 
             span.AddEvent(Event.Create(EventDescription));
             span.AddEvent(EventDescription, attributes);
-            span.AddLink(Link.FromSpanContext(spanContext));
+            span.AddLink(Link.FromActivity(activityLink));
             span.End();
             // exception.expect(IllegalStateException);
             Assert.Throws<InvalidOperationException>(() => ((Span)span).ToSpanData());
@@ -89,13 +90,17 @@ namespace OpenTelemetry.Trace.Test
         [Fact]
         public void NoEventsRecordedAfterEnd()
         {
+            var activityLink = new Activity(SpanName).Start();
+            activityLink.Stop();
+
+            var activity = new Activity(SpanName).Start();
+
             var span =
                 Span.StartSpan(
-                    spanContext,
+                    activity,
                     recordSpanOptions,
                     SpanName,
                     SpanKind.Internal,
-                    parentSpanId,
                     TraceParams.Default,
                     startEndHandler,
                     timestampConverter);
@@ -112,7 +117,7 @@ namespace OpenTelemetry.Trace.Test
                 AttributeValue.StringAttributeValue("MySingleStringAttributeValue"));
             span.AddEvent(Event.Create(EventDescription));
             span.AddEvent(EventDescription, attributes);
-            span.AddLink(Link.FromSpanContext(spanContext));
+            span.AddLink(Link.FromActivity(activityLink));
             var spanData = ((Span)span).ToSpanData();
             Assert.Equal(timestamp, spanData.StartTimestamp);
             Assert.Empty(spanData.Attributes.AttributeMap);
@@ -125,13 +130,19 @@ namespace OpenTelemetry.Trace.Test
         [Fact]
         public void ToSpanData_ActiveSpan()
         {
+            var activityLink = new Activity(SpanName);
+            activityLink.Stop();
+
+            var activity = new Activity(SpanName)
+                .SetParentId(ActivityTraceId.CreateRandom(), ActivitySpanId.CreateRandom())
+                .Start();
+
             var span =
                 Span.StartSpan(
-                    spanContext,
+                    activity,
                     recordSpanOptions,
                     SpanName,
                     SpanKind.Internal,
-                    parentSpanId,
                     TraceParams.Default,
                     startEndHandler,
                     timestampConverter);
@@ -150,12 +161,16 @@ namespace OpenTelemetry.Trace.Test
             span.AddEvent(EventDescription, attributes);
             interval = TimeSpan.FromMilliseconds(300);
             interval = TimeSpan.FromMilliseconds(400);
-            var link = Link.FromSpanContext(spanContext);
+            var link = Link.FromActivity(activityLink);
             span.AddLink(link);
             var spanData = ((Span)span).ToSpanData();
-            Assert.Equal(spanContext, spanData.Context);
+            Assert.Equal(activity.TraceId, spanData.Context.TraceId);
+            Assert.Equal(activity.SpanId, spanData.Context.SpanId);
+            Assert.Equal(activity.ParentSpanId, spanData.ParentSpanId);
+            Assert.Equal(activity.ActivityTraceFlags, spanData.Context.TraceOptions);
+            // TODO tracestate
             Assert.Equal(SpanName, spanData.Name);
-            Assert.Equal(parentSpanId, spanData.ParentSpanId);
+            Assert.Equal(activity.ParentSpanId, spanData.ParentSpanId);
             Assert.Equal(0, spanData.Attributes.DroppedAttributesCount);
             Assert.Equal(expectedAttributes, spanData.Attributes.AttributeMap);
             Assert.Equal(0, spanData.Events.DroppedEventsCount);
@@ -180,13 +195,19 @@ namespace OpenTelemetry.Trace.Test
         [Fact]
         public void GoSpanData_EndedSpan()
         {
+            var activityLink = new Activity(SpanName).Start();
+            activityLink.Stop();
+
+            var activity = new Activity(SpanName)
+                .SetParentId(ActivityTraceId.CreateRandom(), ActivitySpanId.CreateRandom())
+                .Start();
+
             var span =
                 (Span)Span.StartSpan(
-                    spanContext,
+                    activity,
                     recordSpanOptions,
                     SpanName,
                     SpanKind.Internal,
-                    parentSpanId,
                     TraceParams.Default,
                     startEndHandler,
                     timestampConverter);
@@ -204,16 +225,20 @@ namespace OpenTelemetry.Trace.Test
             interval = TimeSpan.FromMilliseconds(200);
             span.AddEvent(EventDescription, attributes);
             interval = TimeSpan.FromMilliseconds(300);
-            var link = Link.FromSpanContext(spanContext);
+            var link = Link.FromActivity(activityLink);
             span.AddLink(link);
             interval = TimeSpan.FromMilliseconds(400);
             span.Status = Status.Cancelled;
             span.End();
 
             var spanData = ((Span)span).ToSpanData();
-            Assert.Equal(spanContext, spanData.Context);
+            Assert.Equal(activity.TraceId, spanData.Context.TraceId);
+            Assert.Equal(activity.SpanId, spanData.Context.SpanId);
+            Assert.Equal(activity.ParentSpanId, spanData.ParentSpanId);
+            Assert.Equal(activity.ActivityTraceFlags, spanData.Context.TraceOptions);
+            // TODO tracestate
             Assert.Equal(SpanName, spanData.Name);
-            Assert.Equal(parentSpanId, spanData.ParentSpanId);
+            Assert.Equal(activity.ParentSpanId, spanData.ParentSpanId);
             Assert.Equal(0, spanData.Attributes.DroppedAttributesCount);
             Assert.Equal(expectedAttributes, spanData.Attributes.AttributeMap);
             Assert.Equal(0, spanData.Events.DroppedEventsCount);
@@ -239,13 +264,14 @@ namespace OpenTelemetry.Trace.Test
         [Fact]
         public void Status_ViaSetStatus()
         {
+            var activity = new Activity(SpanName).Start();
+
             var span =
                 (Span)Span.StartSpan(
-                    spanContext,
+                    activity,
                     recordSpanOptions,
                     SpanName,
                     SpanKind.Internal,
-                    parentSpanId,
                     TraceParams.Default,
                     startEndHandler,
                     timestampConverter);
@@ -263,13 +289,14 @@ namespace OpenTelemetry.Trace.Test
         [Fact]
         public void status_ViaEndSpanOptions()
         {
+            var activity = new Activity(SpanName).Start();
+
             var span =
                 (Span)Span.StartSpan(
-                    spanContext,
+                    activity,
                     recordSpanOptions,
                     SpanName,
                     SpanKind.Internal,
-                    parentSpanId,
                     TraceParams.Default,
                     startEndHandler,
                     timestampConverter);
@@ -288,16 +315,17 @@ namespace OpenTelemetry.Trace.Test
         [Fact]
         public void DroppingAttributes()
         {
+            var activity = new Activity(SpanName).Start();
+
             var maxNumberOfAttributes = 8;
             var traceParams =
                 TraceParams.Default.ToBuilder().SetMaxNumberOfAttributes(maxNumberOfAttributes).Build();
             var span =
                 Span.StartSpan(
-                    spanContext,
+                    activity,
                     recordSpanOptions,
                     SpanName,
                     SpanKind.Internal,
-                    parentSpanId,
                     traceParams,
                     startEndHandler,
                     timestampConverter);
@@ -341,16 +369,17 @@ namespace OpenTelemetry.Trace.Test
         [Fact]
         public void DroppingAndAddingAttributes()
         {
+            var activity = new Activity(SpanName).Start();
+
             var maxNumberOfAttributes = 8;
             var traceParams =
                 TraceParams.Default.ToBuilder().SetMaxNumberOfAttributes(maxNumberOfAttributes).Build();
             var span =
                 Span.StartSpan(
-                    spanContext,
+                    activity,
                     recordSpanOptions,
                     SpanName,
                     SpanKind.Internal,
-                    parentSpanId,
                     traceParams,
                     startEndHandler,
                     timestampConverter);
@@ -412,16 +441,17 @@ namespace OpenTelemetry.Trace.Test
         [Fact]
         public void DroppingEvents()
         {
+            var activity = new Activity(SpanName).Start();
+
             var maxNumberOfEvents = 8;
             var traceParams =
                 TraceParams.Default.ToBuilder().SetMaxNumberOfEvents(maxNumberOfEvents).Build();
             var span =
                 Span.StartSpan(
-                    spanContext,
+                    activity,
                     recordSpanOptions,
                     SpanName,
                     SpanKind.Internal,
-                    parentSpanId,
                     traceParams,
                     startEndHandler,
                     timestampConverter);
@@ -464,20 +494,24 @@ namespace OpenTelemetry.Trace.Test
         [Fact]
         public void DroppingLinks()
         {
+            var activityLink = new Activity(SpanName).Start();
+            activityLink.Stop();
+
+            var activity = new Activity(SpanName).Start();
+
             var maxNumberOfLinks = 8;
             var traceParams =
                 TraceParams.Default.ToBuilder().SetMaxNumberOfLinks(maxNumberOfLinks).Build();
             var span =
                 Span.StartSpan(
-                    spanContext,
+                    activity,
                     recordSpanOptions,
                     SpanName,
                     SpanKind.Internal,
-                    parentSpanId,
                     traceParams,
                     startEndHandler,
                     timestampConverter);
-            var link = Link.FromSpanContext(spanContext);
+            var link = Link.FromActivity(activityLink);
             for (var i = 0; i < 2 * maxNumberOfLinks; i++)
             {
                 span.AddLink(link);
@@ -504,13 +538,14 @@ namespace OpenTelemetry.Trace.Test
         [Fact]
         public void SampleToLocalSpanStore()
         {
+            var activity1 = new Activity(SpanName).Start();
+
             var span =
                 (Span)Span.StartSpan(
-                    spanContext,
+                    activity1,
                     recordSpanOptions,
                     SpanName,
                     SpanKind.Internal,
-                    parentSpanId,
                     TraceParams.Default,
                     startEndHandler,
                     timestampConverter);
@@ -518,13 +553,14 @@ namespace OpenTelemetry.Trace.Test
             span.End();
 
             Assert.True(((Span)span).IsSampleToLocalSpanStore);
+
+            var activity2 = new Activity(SpanName).Start();
             var span2 =
                 Span.StartSpan(
-                    spanContext,
+                    activity2,
                     recordSpanOptions,
                     SpanName,
                     SpanKind.Internal,
-                    parentSpanId,
                     TraceParams.Default,
                     startEndHandler,
                     timestampConverter);
@@ -541,13 +577,14 @@ namespace OpenTelemetry.Trace.Test
         [Fact]
         public void SampleToLocalSpanStore_RunningSpan()
         {
+            var activity = new Activity(SpanName).Start();
+
             var span =
                 Span.StartSpan(
-                    spanContext,
+                    activity,
                     recordSpanOptions,
                     SpanName,
                     SpanKind.Internal,
-                    parentSpanId,
                     TraceParams.Default,
                     startEndHandler,
                     timestampConverter);
@@ -558,13 +595,14 @@ namespace OpenTelemetry.Trace.Test
         [Fact]
         public void BadArguments()
         {
+            var activity = new Activity(SpanName).Start();
+
             var span =
                 Span.StartSpan(
-                    spanContext,
+                    activity,
                     recordSpanOptions,
                     SpanName,
                     SpanKind.Internal,
-                    parentSpanId,
                     TraceParams.Default,
                     startEndHandler,
                     timestampConverter);
@@ -586,12 +624,13 @@ namespace OpenTelemetry.Trace.Test
         [Fact]
         public void SetSampleTo()
         {
+            var activity = new Activity(SpanName).Start();
+
             var span = (Span)Span.StartSpan(
-                spanContext,
+                activity,
                 recordSpanOptions,
                 SpanName,
                 SpanKind.Internal,
-                parentSpanId,
                 TraceParams.Default,
                 startEndHandler,
                 timestampConverter);
@@ -599,6 +638,11 @@ namespace OpenTelemetry.Trace.Test
             span.IsSampleToLocalSpanStore = true;
             span.End();
             Assert.True(span.IsSampleToLocalSpanStore);
+        }
+
+        public void Dispose()
+        {
+            Activity.Current = null;
         }
     }
 }
