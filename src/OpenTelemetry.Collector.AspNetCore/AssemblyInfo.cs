@@ -14,4 +14,3 @@
 // limitations under the License.
 // </copyright>
 
-[assembly: System.CLSCompliant(true)]
