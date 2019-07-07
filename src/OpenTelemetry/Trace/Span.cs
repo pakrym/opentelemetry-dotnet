@@ -46,6 +46,7 @@ namespace OpenTelemetry.Trace
 
         private Span(
                 Activity activity,
+                Tracestate tracestate,
                 SpanOptions options,
                 string name,
                 SpanKind spanKind,
@@ -58,7 +59,7 @@ namespace OpenTelemetry.Trace
                 this.Activity.TraceId, 
                 this.Activity.SpanId, 
                 this.Activity.ActivityTraceFlags, 
-                /*TODO*/ Tracestate.Empty));
+                tracestate));
             this.Options = options;
             this.Name = name;
             this.traceParams = traceParams ?? throw new ArgumentNullException(nameof(traceParams));
@@ -506,6 +507,7 @@ namespace OpenTelemetry.Trace
 
         internal static ISpan StartSpan(
                         Activity activity,
+                        Tracestate tracestate,
                         SpanOptions options,
                         string name,
                         SpanKind spanKind,
@@ -515,6 +517,7 @@ namespace OpenTelemetry.Trace
         {
             var span = new Span(
                activity,
+               tracestate,
                options,
                name,
                spanKind,
