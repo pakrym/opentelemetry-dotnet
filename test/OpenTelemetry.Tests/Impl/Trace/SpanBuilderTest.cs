@@ -251,6 +251,7 @@ namespace OpenTelemetry.Trace.Test
                 .SetSpanKind(SpanKind.Internal)
                 .SetNoParent()
                 .StartSpan();
+
             Assert.True(rootSpan.Context.IsValid);
             Assert.True(rootSpan.IsRecordingEvents);
             Assert.True((rootSpan.Context.TraceOptions & ActivityTraceFlags.Recorded) != 0);
@@ -266,11 +267,11 @@ namespace OpenTelemetry.Trace.Test
             Assert.Equal(((Span)rootSpan).TimestampConverter, ((Span)childSpan).TimestampConverter);
         }
 
-
         [Fact]
         public void StartSpanInScopeOfCurrentActivity()
         {
             var parentActivity = new Activity(SpanName).Start();
+            parentActivity.TraceStateString = "k1=v1,k2=v2";
 
             var childSpan = new SpanBuilder(SpanName, spanBuilderOptions)
                 .SetSpanKind(SpanKind.Internal)
@@ -282,6 +283,8 @@ namespace OpenTelemetry.Trace.Test
 
             Assert.NotNull(Activity.Current);
             Assert.Equal(Activity.Current.Parent, parentActivity);
+
+            Assert.Equal("k1=v1,k2=v2", childSpan.Context.Tracestate.ToString());
         }
 
         [Fact]
@@ -305,6 +308,7 @@ namespace OpenTelemetry.Trace.Test
         public void StartSpanInScopeOfCurrentActivityNoParent()
         {
             var parentActivity = new Activity(SpanName).Start();
+            parentActivity.TraceStateString = "k1=v1,k2=v2";
 
             var childSpan = new SpanBuilder(SpanName, spanBuilderOptions)
                 .SetSpanKind(SpanKind.Internal)
@@ -318,12 +322,14 @@ namespace OpenTelemetry.Trace.Test
             Assert.NotNull(Activity.Current);
             Assert.Equal(Activity.Current.TraceId, childSpan.Context.TraceId);
             Assert.Equal(Activity.Current.SpanId, childSpan.Context.SpanId);
+            Assert.Empty(childSpan.Context.Tracestate.Entries);
         }
 
         [Fact]
         public void StartSpanFromExplicitActivity()
         {
             var parentActivity = new Activity(SpanName).Start();
+            parentActivity.TraceStateString = "k1=v1,k2=v2";
             parentActivity.Stop();
 
             var childSpan = new SpanBuilder(SpanName, spanBuilderOptions)
@@ -338,6 +344,7 @@ namespace OpenTelemetry.Trace.Test
             Assert.NotNull(Activity.Current);
             Assert.Equal(Activity.Current.TraceId, parentActivity.TraceId);
             Assert.Equal(Activity.Current.ParentSpanId, parentActivity.SpanId);
+            Assert.Equal("k1=v1,k2=v2", childSpan.Context.Tracestate.ToString());
         }
 
         [Fact]
@@ -362,6 +369,7 @@ namespace OpenTelemetry.Trace.Test
         public void StartSpanFromCurrentActivity()
         {
             var activity = new Activity(SpanName).Start();
+            activity.TraceStateString = "k1=v1,k2=v2";
 
             var span = new SpanBuilder(SpanName, spanBuilderOptions)
                 .SetSpanKind(SpanKind.Internal)
@@ -375,6 +383,7 @@ namespace OpenTelemetry.Trace.Test
 
             Assert.NotNull(Activity.Current);
             Assert.Equal(Activity.Current, activity);
+            Assert.Equal("k1=v1,k2=v2", span.Context.Tracestate.ToString());
         }
 
         [Fact]
@@ -413,6 +422,7 @@ namespace OpenTelemetry.Trace.Test
             Assert.NotNull(Activity.Current);
             Assert.Equal(Activity.Current.TraceId, span.Context.TraceId);
             Assert.Equal(Activity.Current.SpanId, span.Context.SpanId);
+            Assert.Empty(span.Context.Tracestate.Entries);
         }
 
         [Fact]
@@ -433,6 +443,12 @@ namespace OpenTelemetry.Trace.Test
         public void StartSpan_CurrentSpanParent()
         {
             var rootSpan = new SpanBuilder(SpanName, spanBuilderOptions)
+                .SetParent(
+                    SpanContext.Create(
+                        ActivityTraceId.CreateRandom(), 
+                        ActivitySpanId.CreateRandom(),
+                        ActivityTraceFlags.None, 
+                        Tracestate.Builder.Set("k1", "v1").Build()))
                 .StartSpan();
             using (CurrentSpanUtils.WithSpan(rootSpan, true))
             {
@@ -442,6 +458,7 @@ namespace OpenTelemetry.Trace.Test
                 Assert.True(childSpan.Context.IsValid);
                 Assert.Equal(rootSpan.Context.TraceId, childSpan.Context.TraceId);
                 Assert.Equal(rootSpan.Context.SpanId, childSpan.ParentSpanId);
+                Assert.Equal("k1=v1", childSpan.Context.Tracestate.ToString());
             }
         }
 
@@ -483,7 +500,8 @@ namespace OpenTelemetry.Trace.Test
                 SpanContext.Create(
                     ActivityTraceId.CreateRandom(),
                     ActivitySpanId.CreateRandom(),
-                    ActivityTraceFlags.None, Tracestate.Empty);
+                    ActivityTraceFlags.None,
+                    Tracestate.Builder.Set("k1", "v1").Build());
 
             var span = new SpanBuilder(SpanName, spanBuilderOptions)
                 .SetSpanKind(SpanKind.Internal)
@@ -496,6 +514,7 @@ namespace OpenTelemetry.Trace.Test
             Assert.True((span.Context.TraceOptions & ActivityTraceFlags.Recorded) != 0);
             var spanData = ((Span)span).ToSpanData();
             Assert.Equal(spanContext.SpanId, spanData.ParentSpanId);
+            Assert.Equal("k1=v1", span.Context.Tracestate.ToString());
         }
 
         [Fact]
