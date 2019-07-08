@@ -29,6 +29,7 @@ namespace OpenTelemetry.Trace
     {
         private readonly SpanBuilderOptions spanBuilderOptions;
         private readonly IExportComponent exportComponent;
+        private readonly CurrentSpanUtils currentSpanUtils = new CurrentSpanUtils();
 
         public Tracer(IStartEndHandler startEndHandler, ITraceConfig traceConfig, IExportComponent exportComponent)
             : this(startEndHandler, traceConfig, exportComponent, null, null)
@@ -44,7 +45,7 @@ namespace OpenTelemetry.Trace
         }
 
         /// <inheritdoc/>
-        public ISpan CurrentSpan => CurrentSpanUtils.CurrentSpan ?? BlankSpan.Instance;
+        public ISpan CurrentSpan => this.currentSpanUtils.CurrentSpan;
 
         /// <inheritdoc/>
         public IBinaryFormat BinaryFormat { get; }
@@ -60,7 +61,7 @@ namespace OpenTelemetry.Trace
                 throw new ArgumentNullException(nameof(span));
             }
 
-            return CurrentSpanUtils.WithSpan(span, true);
+            return this.currentSpanUtils.WithSpan(span, true);
         }
 
         /// <inheritdoc/>
